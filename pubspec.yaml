@@ -1,0 +1,27 @@
+#pubspec.yaml
+name: books_app
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  http: ^1.1.0       # Para hacer peticiones a la API de Google
+  cached_network_image: ^3.3.0 # Para cargar las portadas de los libros suavemente
+  cupertino_icons: ^1.0.8
+  flutter_tts: ^3.5.0 # Para la funcionalidad de texto a voz
+  logger: ^1.1.0       # Para el registro de errores y eventos
+  url_launcher: ^6.2.5 # Para abrir enlaces externos (como la página de detalles del libro)
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+
+  uses-material-design: true
