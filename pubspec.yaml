@@ -17,10 +17,12 @@ dependencies:
   flutter_tts: ^3.5.0 # Para la funcionalidad de texto a voz
   logger: ^1.1.0       # Para el registro de errores y eventos
   url_launcher: ^6.2.5 # Para abrir enlaces externos (como la página de detalles del libro)
+  hive_flutter: ^1.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  hive: ^2.2.3
 
 flutter:
 

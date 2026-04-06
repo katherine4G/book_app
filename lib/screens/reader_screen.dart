@@ -1,6 +1,5 @@
 //lib/screens/reader_screen.dart
 import 'package:flutter/material.dart';
-import '../services/ai_service.dart';
 
 class ReaderScreen extends StatefulWidget {
   final String fullText;

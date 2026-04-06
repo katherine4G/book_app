@@ -1,10 +1,17 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart'; // Necesario para compute
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import '../model/book.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import '../model/book.dart';
 import 'reader_screen.dart';
+
+// --- FUNCIÓN TOP-LEVEL (Fuera de la clase) ---
+// Procesamos el texto en un Isolate separado para no congelar la UI.
+String _procesarTextoPesado(String rawText) {
+  return rawText.trim().replaceAll('\r\n', '\n');
+}
 
 class BookDetailScreen extends StatefulWidget {
   final Book book;
@@ -19,47 +26,89 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   bool isPlaying = false;
 
   Future<void> _abrirLectorEspecial(BuildContext context, Book book) async {
+    // Añade un mensaje dinámico en el loading para que el usuario no se desespere
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          const Center(child: CircularProgressIndicator(color: Colors.green)),
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(color: Colors.green),
+            const SizedBox(height: 15),
+            Text("Descargando..."), // Feedback real
+          ],
+        ),
+      ),
     );
-
     String? textoFinal;
 
+    // En lib/screens/book_detail_screen.dart
+
     try {
-      final response = await http.get(
-        Uri.parse(
-          'https://gutendex.com/books/?search=${Uri.encodeComponent(book.title)}',
-        ),
-      );
+      // 2. Buscamos específicamente en español y sumamos el autor para precisión
+      final String query = Uri.encodeComponent(widget.book.title);
+      final url = 'https://gutendex.com/books/?search=$query&languages=es';
+
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 15));
+
       final data = json.decode(response.body);
 
-      // Verificamos antes de cerrar el Dialog
-      if (!mounted) return;
-      Navigator.of(context).pop();
-
       if (data['results'] != null && data['results'].isNotEmpty) {
-        Map<String, dynamic> formats = data['results'][0]['formats'];
-        String? textUrl =
-            formats['text/plain; charset=utf-8'] ?? formats['text/plain'];
+        // Buscamos en los resultados cuál tiene el formato de texto plano
+        var bestResult = data['results'].firstWhere(
+          (book) =>
+              book['formats'].containsKey('text/plain; charset=utf-8') ||
+              book['formats'].containsKey('text/plain'),
+          orElse: () => null,
+        );
 
-        if (textUrl != null) {
-          final textRes = await http.get(Uri.parse(textUrl));
-          textoFinal = textRes.body;
+        if (bestResult != null) {
+          Map<String, dynamic> formats = bestResult['formats'];
+          String? textUrl =
+              formats['text/plain; charset=utf-8'] ?? formats['text/plain'];
+
+          if (textUrl != null) {
+            final textRes = await http.get(Uri.parse(textUrl));
+            textoFinal = await compute(_procesarTextoPesado, textRes.body);
+          }
         }
       }
     } catch (e) {
-      if (mounted) Navigator.of(context).pop();
-      debugPrint("Error: $e");
+      debugPrint("Error en Lector Especial: $e");
+    } finally {
+      // 4. Cerrar Dialog (Siempre se ejecuta, incluso si falla)
+      if (mounted) Navigator.of(context).pop(); // Cierra el loading
+
+      if (textoFinal == null || textoFinal.length < 500) {
+        if (mounted) Navigator.of(context).pop(); // Quita el loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Este ejemplar solo está disponible para consulta de sinopsis.",
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Solo si textoFinal tiene el contenido real, navegamos
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) =>
+              ReaderScreen(fullText: textoFinal!, title: widget.book.title),
+        ),
+      );
     }
 
-    // Verificamos antes de navegar a la nueva pantalla
     if (!mounted) return;
 
+    // Si no logramos bajar el texto completo, usamos la descripción como fallback
     textoFinal ??= book.description;
 
+    // 5. Navegar al Lector
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) =>
@@ -132,12 +181,12 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
+            // Portada con Sombra
             Center(
               child: Container(
                 decoration: BoxDecoration(
@@ -155,6 +204,16 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     widget.book.thumbnailUrl,
                     height: 280,
                     fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 280,
+                      width: 180,
+                      color: Colors.grey[900],
+                      child: const Icon(
+                        Icons.book,
+                        color: Colors.white24,
+                        size: 80,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -175,6 +234,8 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               style: const TextStyle(fontSize: 18, color: Colors.blueGrey),
             ),
             const SizedBox(height: 30),
+
+            // Acciones Rápidas
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -194,7 +255,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             ),
             const SizedBox(height: 30),
 
-            // BOTÓN PRINCIPAL
+            // Botón de Lectura con compute aplicado
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -204,7 +265,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  elevation: 5,
                 ),
                 onPressed: () => _abrirLectorEspecial(context, widget.book),
                 child: const Text(
@@ -218,19 +278,17 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               ),
             ),
 
-            // BOTÓN DE FUENTE EXTERNA (Solo para libros de IT)
             if (widget.book.source == 'IT_BOOKSTORE')
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: TextButton.icon(
                   onPressed: () async {
                     final url = Uri.parse(widget.book.infoUrl);
-                    if (await canLaunchUrl(url)) {
+                    if (await canLaunchUrl(url))
                       await launchUrl(
                         url,
                         mode: LaunchMode.externalApplication,
                       );
-                    }
                   },
                   icon: const Icon(
                     Icons.open_in_new,

@@ -3,7 +3,7 @@ class Book {
   final String authors;
   final String thumbnailUrl;
   final String description;
-  final String source; // Para saber de dónde viene el libro
+  final String source;
   final String infoUrl;
 
   Book({
@@ -14,6 +14,51 @@ class Book {
     required this.source,
     required this.infoUrl,
   });
+
+  // METODOS PARA HIVE (SERIALIZACIÓN)
+
+  /// Convierte el objeto Book a un Map para guardarlo en Hive
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'authors': authors,
+      'thumbnailUrl': thumbnailUrl,
+      'description': description,
+      'source': source,
+      'infoUrl': infoUrl,
+    };
+  }
+
+  /// Crea un objeto Book desde un Map recuperado de Hive
+  factory Book.fromMap(Map<dynamic, dynamic> map) {
+    return Book(
+      title: map['title'] ?? '',
+      authors: map['authors'] ?? '',
+      thumbnailUrl: map['thumbnailUrl'] ?? '',
+      description: map['description'] ?? '',
+      source: map['source'] ?? '',
+      infoUrl: map['infoUrl'] ?? '',
+    );
+  }
+
+  // ADAPTADORES DE LAS APIs (FACTORIES)
+
+  // Adaptador para Google Books (Agregado para completar el set)
+  factory Book.fromGoogleBooks(Map<String, dynamic> json) {
+    final info = json['volumeInfo'] ?? {};
+    final imageLinks = info['imageLinks'] ?? {};
+    return Book(
+      title: info['title'] ?? 'Sin título',
+      authors: (info['authors'] as List?)?.join(', ') ?? 'Autor desconocido',
+      thumbnailUrl: (imageLinks['thumbnail'] ?? '').replaceAll(
+        'http://',
+        'https://',
+      ),
+      description: info['description'] ?? 'Sin descripción.',
+      source: 'GOOGLE_BOOKS',
+      infoUrl: info['infoLink'] ?? '',
+    );
+  }
 
   // Adaptador para IT Bookstore
   factory Book.fromITBook(Map<String, dynamic> json) {
@@ -28,16 +73,16 @@ class Book {
     );
   }
 
-  // Adaptador para Gutendex (Clásicos)
+  // Adaptador para Gutendex
   factory Book.fromGutendex(Map<String, dynamic> json) {
+    final authorsList = json['authors'] as List? ?? [];
     return Book(
       title: json['title'] ?? 'Sin título',
-      authors: (json['authors'] as List).map((e) => e['name']).join(', '),
-      thumbnailUrl:
-          json['formats']['image/jpeg'] ?? 'https://via.placeholder.com/150',
+      authors: authorsList.map((e) => e['name']).join(', '),
+      thumbnailUrl: json['formats']?['image/jpeg'] ?? '',
       description: "Clásico literario. Disponible para Audiolibro e IA Tutor.",
       source: 'GUTENDEX',
-      infoUrl: json['url'] ?? '',
+      infoUrl: '', // Gutendex no siempre da una infoUrl directa
     );
   }
 
@@ -48,7 +93,7 @@ class Book {
       authors: "Varios autores",
       thumbnailUrl: json['cover_id'] != null
           ? 'https://covers.openlibrary.org/b/id/${json['cover_id']}-M.jpg'
-          : 'https://via.placeholder.com/150',
+          : '',
       description: "Libro de la biblioteca abierta.",
       source: 'OPEN_LIBRARY',
       infoUrl: 'https://openlibrary.org${json['key']}',
