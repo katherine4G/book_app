@@ -104,17 +104,6 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
 
     if (!mounted) return;
-
-    // Si no logramos bajar el texto completo, usamos la descripción como fallback
-    textoFinal ??= book.description;
-
-    // 5. Navegar al Lector
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) =>
-            ReaderScreen(fullText: textoFinal!, title: book.title),
-      ),
-    );
   }
 
   Future<void> _speak(String text) async {
